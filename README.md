@@ -94,7 +94,9 @@ cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 安装依赖
+# 安装依赖（推荐使用自动安装脚本）
+python ../install_dependencies.py
+# 或手动安装
 pip install -r requirements.txt
 
 # 配置环境变量
@@ -167,9 +169,22 @@ ai:
 
 5. **测试Ollama集成**
 ```bash
-# 运行测试脚本
+# 环境检查（推荐先运行）
+python check_environment.py
+
+# 完整测试
 python test_ollama.py
+
+# 或使用pytest
+pytest test_ollama_simple.py -v -s
 ```
+
+> **遇到问题？** 查看 [故障排除指南](docs/troubleshooting.md) 获取详细的解决方案。
+> 
+> **常见问题快速修复**：
+> - 缺少依赖：`python install_dependencies.py`
+> - pytest异步错误：`pip install pytest-asyncio` 或直接运行 `python test_ollama.py`
+> - Ollama连接失败：确保运行 `ollama serve`
 
 ## 📁 项目结构
 

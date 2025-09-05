@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 import yaml
-from pydantic import BaseSettings, Field, validator
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings
 
 
 class WebSocketSettings(BaseSettings):
@@ -26,7 +27,7 @@ class SecuritySettings(BaseSettings):
     max_request_size: int = 10485760  # 10MB
     rate_limit_per_minute: int = 60
     jwt_expire_minutes: int = 1440  # 24小时
-    secret_key: str = Field(..., env="SECRET_KEY")
+    secret_key: str = Field("default-secret-key-change-in-production", env="SECRET_KEY")
     algorithm: str = "HS256"
 
 
@@ -143,14 +144,14 @@ class MemorySettings(BaseSettings):
 class DatabaseSettings(BaseSettings):
     """数据库配置"""
     # PostgreSQL
-    postgres_url: str = Field(..., env="DATABASE_URL")
+    postgres_url: str = Field("postgresql://user:pass@localhost:5432/chatbot", env="DATABASE_URL")
     postgres_pool_size: int = 10
     postgres_max_overflow: int = 20
     postgres_pool_timeout: int = 30
     postgres_echo: bool = False
     
     # Redis
-    redis_url: str = Field(..., env="REDIS_URL")
+    redis_url: str = Field("redis://localhost:6379/0", env="REDIS_URL")
     redis_max_connections: int = 50
     redis_socket_timeout: int = 5
     redis_socket_connect_timeout: int = 5

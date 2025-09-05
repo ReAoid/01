@@ -30,6 +30,7 @@ opencv-python==4.8.1.78
 # 数据处理和验证
 pydantic==2.5.0
 pydantic-settings==2.1.0
+PyYAML==6.0.1
 numpy==1.24.4
 pandas==2.1.4
 
@@ -39,6 +40,7 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 aiofiles==23.2.1
 httpx==0.25.2
+aiohttp==3.9.1
 
 # 监控和日志
 structlog==23.2.0
