@@ -1,67 +1,59 @@
 # AI聊天机器人系统配置文件
+# 支持开发和生产环境的差异化配置
 
-# 系统配置
+# 通用配置（所有环境共享）
 system:
-  # 上下文管理
   max_context_tokens: 8192
-  session_timeout: 3600  # 秒
+  session_timeout: 3600
   max_sessions_per_user: 10
-  
-  # WebSocket配置
   websocket:
     ping_interval: 30
     ping_timeout: 10
     max_reconnect_attempts: 5
     heartbeat_interval: 60
-  
-  # 安全配置
-  security:
-    max_request_size: 10485760  # 10MB
-    rate_limit_per_minute: 60
-    jwt_expire_minutes: 1440  # 24小时
 
-# AI模型配置
+security:
+  max_request_size: 10485760  # 10MB
+  rate_limit_per_minute: 60
+  jwt_expire_minutes: 1440  # 24小时
+
+# AI配置
 ai:
-  # 基础模型设置
   model:
-    provider: "openai"  # openai, anthropic, local
-    name: "gpt-4-turbo-preview"
+    provider: "ollama"  # 可选: "openai", "anthropic", "ollama"
+    name: "llama2:7b"  # Ollama模型名称
     temperature: 0.7
     max_tokens: 1024
     top_p: 0.9
     frequency_penalty: 0.1
     presence_penalty: 0.1
   
-  # 流式输出配置
   streaming:
     enabled: true
     chunk_size: 16
     delay_ms: 50
     buffer_size: 1024
   
-  # 上下文管理
   context:
     max_history_messages: 50
     summary_trigger_tokens: 6000
     importance_threshold: 0.6
-    
-  # 语音处理
+  
   voice:
     asr_model: "whisper-medium"
-    tts_provider: "azure"  # azure, openai, local
+    tts_provider: "azure"
     tts_voice: "zh-CN-XiaoxiaoNeural"
     sample_rate: 16000
-    chunk_duration: 30  # 秒
+    chunk_duration: 30
 
 # 人设系统配置
 character:
-  # 默认人设
   default:
     name: "小助手"
     personality:
       traits: ["友善", "耐心", "专业", "幽默"]
       introverted: false
-      formality_level: 0.6  # 0-1, 0为非常随意，1为非常正式
+      formality_level: 0.6
     knowledge_domains: ["通用知识", "技术支持", "日常对话"]
     writing_style:
       tone: "温和友善"
@@ -69,7 +61,6 @@ character:
       use_emoji: true
       technical_level: "适中"
   
-  # 人设一致性检查
   consistency:
     check_enabled: true
     deviation_threshold: 0.7
@@ -77,119 +68,111 @@ character:
 
 # 记忆系统配置
 memory:
-  # 短期记忆（当前会话）
-  short_term:
-    max_tokens: 2000
-    retention_hours: 24
+  # 短期记忆
+  short_term_max_tokens: 2000
+  short_term_retention_hours: 24
   
-  # 中期记忆（会话摘要）
-  medium_term:
-    max_entries: 100
-    retention_days: 30
-    summary_min_length: 50
+  # 中期记忆
+  medium_term_max_entries: 100
+  medium_term_retention_days: 30
+  medium_term_summary_min_length: 50
   
-  # 长期记忆（用户画像）
-  long_term:
-    update_frequency: 300  # 秒
-    relevance_threshold: 0.5
-    max_entities_per_user: 1000
-    
+  # 长期记忆
+  long_term_update_frequency: 300
+  long_term_relevance_threshold: 0.5
+  long_term_max_entities_per_user: 1000
+  
   # 记忆检索
-  retrieval:
-    max_results: 10
-    similarity_threshold: 0.7
-    boost_recent: true
-
-# 数据库配置
-database:
-  # PostgreSQL主数据库
-  postgres:
-    pool_size: 10
-    max_overflow: 20
-    pool_timeout: 30
-    echo: false  # 生产环境设为false
-  
-  # Redis缓存
-  redis:
-    max_connections: 50
-    socket_timeout: 5
-    socket_connect_timeout: 5
-    retry_on_timeout: true
+  retrieval_max_results: 10
+  retrieval_similarity_threshold: 0.7
+  retrieval_boost_recent: true
 
 # 媒体处理配置
 media:
-  # 图像处理
-  image:
-    max_size: 5242880  # 5MB
-    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"]
-    ocr_enabled: true
-    vision_analysis: true
+  # 图像
+  image_max_size: 5242880  # 5MB
+  image_allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"]
+  image_ocr_enabled: true
+  image_vision_analysis: true
   
-  # 音频处理
-  audio:
-    max_duration: 300  # 5分钟
-    allowed_formats: ["wav", "mp3", "m4a", "ogg"]
-    auto_transcribe: true
+  # 音频
+  audio_max_duration: 300  # 5分钟
+  audio_allowed_formats: ["wav", "mp3", "m4a", "ogg"]
+  audio_auto_transcribe: true
   
   # 文件上传
-  upload:
-    temp_dir: "/tmp/chatbot_uploads"
-    cleanup_interval: 3600  # 1小时
+  upload_temp_dir: "/tmp/chatbot_uploads"
+  upload_cleanup_interval: 3600
 
-# Live2D虚拟形象配置
+# Live2D配置
 live2d:
   enabled: true
   models_path: "/static/live2d/models"
   default_model: "default_character"
   
   # 动作配置
-  motions:
-    idle_motions: ["idle_01", "idle_02", "idle_03"]
-    talk_motions: ["talk_01", "talk_02"]
-    emotion_motions:
-      happy: ["happy_01", "happy_02"]
-      sad: ["sad_01"]
-      surprised: ["surprised_01"]
-      angry: ["angry_01"]
+  idle_motions: ["idle_01", "idle_02", "idle_03"]
+  talk_motions: ["talk_01", "talk_02"]
+  emotion_motions:
+    happy: ["happy_01", "happy_02"]
+    sad: ["sad_01"]
+    surprised: ["surprised_01"]
+    angry: ["angry_01"]
   
-  # 表情触发
-  emotion_detection:
-    enabled: true
-    confidence_threshold: 0.6
-    update_interval: 2000  # 毫秒
+  # 表情检测
+  emotion_detection_enabled: true
+  emotion_confidence_threshold: 0.6
+  emotion_update_interval: 2000  # 毫秒
 
-# 监控和日志配置
+# 监控配置
 monitoring:
-  # 日志配置
-  logging:
-    level: "INFO"
-    format: "json"
-    file_rotation: "1 day"
-    max_file_size: "100MB"
+  # 日志
+  log_level: "INFO"
+  log_format: "json"
+  log_file_rotation: "1 day"
+  log_max_file_size: "100MB"
   
   # 性能监控
-  metrics:
-    enabled: true
-    collection_interval: 60
-    retention_days: 7
+  metrics_enabled: true
+  metrics_collection_interval: 60
+  metrics_retention_days: 7
   
   # 健康检查
-  health_check:
-    interval: 30
-    timeout: 10
-    endpoints: ["/health", "/ready"]
+  health_check_interval: 30
+  health_check_timeout: 10
 
 # 开发环境配置
 development:
-  debug: true
-  reload: true
-  cors_origins: ["http://localhost:3000", "http://127.0.0.1:3000"]
-  log_level: "DEBUG"
+  ai:
+    model:
+      provider: "ollama"
+      name: "llama2:7b"  # 开发环境使用较小的模型
+      temperature: 0.8  # 开发环境可以更有创意
+  
+  monitoring:
+    log_level: "DEBUG"
+    metrics_enabled: true
+  
+  live2d:
+    enabled: true  # 开发环境启用Live2D便于测试
 
 # 生产环境配置
 production:
-  debug: false
-  reload: false
-  cors_origins: []  # 配置实际域名
-  log_level: "INFO"
-  workers: 4
+  ai:
+    model:
+      provider: "ollama"
+      name: "llama2:13b"  # 生产环境使用更大的模型
+      temperature: 0.7
+  
+  system:
+    max_sessions_per_user: 20  # 生产环境允许更多会话
+  
+  security:
+    rate_limit_per_minute: 30  # 生产环境更严格的限制
+  
+  monitoring:
+    log_level: "INFO"
+    metrics_enabled: true
+  
+  live2d:
+    enabled: false  # 生产环境可选择禁用Live2D以节省资源

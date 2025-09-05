@@ -20,6 +20,7 @@ from .core.ai_pipeline import ai_pipeline
 from .core.stream_handler import stream_handler
 from .models.chat_models import MessageCreate, MessageResponse, SessionCreate, SessionResponse
 from .models.user_models import UserCreate, UserResponse, UserLogin, TokenResponse
+from .api.ollama import router as ollama_router
 from .utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -70,6 +71,8 @@ app.add_middleware(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# 注册API路由
+app.include_router(ollama_router, prefix="/api")
 
 # 全局异常处理器
 @app.exception_handler(HTTPException)

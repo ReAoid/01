@@ -23,6 +23,7 @@ from .context_manager import ContextManager
 from .memory_manager import MemoryManager
 from .character_system import CharacterSystem
 from .stream_handler import StreamHandler
+from ..services.ollama_service import get_ollama_service
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,14 +40,22 @@ class AIPipeline:
         self.stream_handler = StreamHandler()
         
         # AI客户端
+        self.ollama_service = None
         self.openai_client = None
         self.anthropic_client = None
         
-        self._init_ai_clients()
+        self._init_ai_clients_sync()
     
-    def _init_ai_clients(self):
+    async def _init_ai_clients(self):
         """初始化AI客户端"""
         try:
+            # Ollama服务
+            self.ollama_service = await get_ollama_service()
+            if self.ollama_service and self.ollama_service.available_models:
+                logger.info(f"Ollama服务初始化成功，可用模型: {len(self.ollama_service.available_models)}个")
+            else:
+                logger.warning("Ollama服务初始化失败或无可用模型")
+            
             # OpenAI客户端
             if settings.openai_api_key:
                 self.openai_client = AsyncOpenAI(
@@ -60,6 +69,19 @@ class AIPipeline:
             #     self.anthropic_client = anthropic.AsyncAnthropic(
             #         api_key=settings.anthropic_api_key
             #     )
+            
+        except Exception as e:
+            logger.error(f"初始化AI客户端失败: {e}")
+    
+    def _init_ai_clients_sync(self):
+        """同步初始化AI客户端（用于__init__）"""
+        try:
+            # OpenAI客户端
+            if settings.openai_api_key:
+                self.openai_client = AsyncOpenAI(
+                    api_key=settings.openai_api_key
+                )
+                logger.info("OpenAI客户端初始化成功")
             
         except Exception as e:
             logger.error(f"初始化AI客户端失败: {e}")
@@ -335,29 +357,76 @@ class AIPipeline:
     ) -> str:
         """生成AI响应（非流式）"""
         try:
-            if not self.openai_client:
-                return "抱歉，AI服务暂时不可用。"
+            # 确保Ollama服务已初始化
+            if not self.ollama_service:
+                await self._init_ai_clients()
             
             # 配置生成参数
             model_config = settings.ai.model
+            provider = model_config.provider
             
-            response = await self.openai_client.chat.completions.create(
-                model=model_config.name,
-                messages=messages,
-                temperature=model_config.temperature,
-                max_tokens=model_config.max_tokens,
-                top_p=model_config.top_p,
-                frequency_penalty=model_config.frequency_penalty,
-                presence_penalty=model_config.presence_penalty
-            )
+            # 根据提供商选择不同的生成方法
+            if provider == "ollama" and self.ollama_service:
+                # 使用Ollama生成
+                model_name = model_config.name
+                
+                # 如果指定的模型不可用，尝试推荐一个
+                if not self.ollama_service.is_model_available(model_name):
+                    recommended_model = await self.ollama_service.suggest_model_for_task("chat")
+                    if recommended_model:
+                        model_name = recommended_model
+                        logger.info(f"使用推荐模型: {model_name}")
+                    else:
+                        return "抱歉，没有可用的Ollama模型。"
+                
+                generated_text = await self.ollama_service.generate_response(
+                    model=model_name,
+                    messages=messages,
+                    temperature=model_config.temperature,
+                    max_tokens=model_config.max_tokens,
+                    top_p=model_config.top_p
+                )
+                
+                # 更新元数据
+                metadata["model_used"] = model_name
+                metadata["provider"] = "ollama"
+                metadata["tokens_used"] += len(generated_text.split())  # 估算token数
+                
+                return generated_text or "抱歉，我暂时无法回复。"
+                
+            elif provider == "openai" and self.openai_client:
+                # 使用OpenAI生成
+                response = await self.openai_client.chat.completions.create(
+                    model=model_config.name,
+                    messages=messages,
+                    temperature=model_config.temperature,
+                    max_tokens=model_config.max_tokens,
+                    top_p=model_config.top_p,
+                    frequency_penalty=model_config.frequency_penalty,
+                    presence_penalty=model_config.presence_penalty
+                )
+                
+                generated_text = response.choices[0].message.content
+                
+                # 更新元数据
+                metadata["model_used"] = model_config.name
+                metadata["provider"] = "openai"
+                metadata["tokens_used"] += response.usage.total_tokens
+                
+                return generated_text or "抱歉，我暂时无法回复。"
             
-            generated_text = response.choices[0].message.content
-            
-            # 更新元数据
-            metadata["model_used"] = model_config.name
-            metadata["tokens_used"] += response.usage.total_tokens
-            
-            return generated_text or "抱歉，我暂时无法回复。"
+            else:
+                # 回退到默认错误信息
+                available_providers = []
+                if self.ollama_service and self.ollama_service.available_models:
+                    available_providers.append("ollama")
+                if self.openai_client:
+                    available_providers.append("openai")
+                
+                if available_providers:
+                    return f"抱歉，配置的AI提供商 '{provider}' 不可用。可用的提供商: {', '.join(available_providers)}"
+                else:
+                    return "抱歉，AI服务暂时不可用。"
             
         except Exception as e:
             logger.error(f"生成AI响应失败: {e}")
@@ -372,53 +441,118 @@ class AIPipeline:
     ) -> str:
         """生成流式AI响应"""
         try:
-            if not self.openai_client:
-                await self.stream_handler.send_stream_chunk(
-                    stream_id, "抱歉，AI服务暂时不可用。", is_final=True
-                )
-                return "抱歉，AI服务暂时不可用。"
+            # 确保Ollama服务已初始化
+            if not self.ollama_service:
+                await self._init_ai_clients()
+            
+            # 配置生成参数
+            model_config = settings.ai.model
+            provider = model_config.provider
             
             # 发送开始信号
             await self.stream_handler.send_status_update(
                 stream_id, "generating", "AI正在思考中..."
             )
             
-            # 配置生成参数
-            model_config = settings.ai.model
-            
-            # 创建流式响应
-            stream = await self.openai_client.chat.completions.create(
-                model=model_config.name,
-                messages=messages,
-                temperature=model_config.temperature,
-                max_tokens=model_config.max_tokens,
-                top_p=model_config.top_p,
-                frequency_penalty=model_config.frequency_penalty,
-                presence_penalty=model_config.presence_penalty,
-                stream=True
-            )
-            
-            # 处理流式响应
-            full_response = ""
-            
-            async def response_generator():
-                nonlocal full_response
-                async for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        token = chunk.choices[0].delta.content
+            # 根据提供商选择不同的流式生成方法
+            if provider == "ollama" and self.ollama_service:
+                # 使用Ollama流式生成
+                model_name = model_config.name
+                
+                # 如果指定的模型不可用，尝试推荐一个
+                if not self.ollama_service.is_model_available(model_name):
+                    recommended_model = await self.ollama_service.suggest_model_for_task("chat")
+                    if recommended_model:
+                        model_name = recommended_model
+                        logger.info(f"使用推荐模型: {model_name}")
+                    else:
+                        error_msg = "抱歉，没有可用的Ollama模型。"
+                        await self.stream_handler.send_stream_chunk(
+                            stream_id, error_msg, is_final=True
+                        )
+                        return error_msg
+                
+                # 处理流式响应
+                full_response = ""
+                
+                async def ollama_response_generator():
+                    nonlocal full_response
+                    async for token in self.ollama_service.generate_streaming_response(
+                        model=model_name,
+                        messages=messages,
+                        temperature=model_config.temperature,
+                        max_tokens=model_config.max_tokens,
+                        top_p=model_config.top_p
+                    ):
                         full_response += token
                         yield token
+                
+                # 使用流处理器传输响应
+                await self.stream_handler.stream_ai_response(
+                    stream_id, ollama_response_generator(), character_config
+                )
+                
+                # 更新元数据
+                metadata["model_used"] = model_name
+                metadata["provider"] = "ollama"
+                metadata["tokens_used"] += len(full_response.split())  # 估算token数
+                
+                return full_response or "抱歉，我暂时无法回复。"
+                
+            elif provider == "openai" and self.openai_client:
+                # 使用OpenAI流式生成
+                # 创建流式响应
+                stream = await self.openai_client.chat.completions.create(
+                    model=model_config.name,
+                    messages=messages,
+                    temperature=model_config.temperature,
+                    max_tokens=model_config.max_tokens,
+                    top_p=model_config.top_p,
+                    frequency_penalty=model_config.frequency_penalty,
+                    presence_penalty=model_config.presence_penalty,
+                    stream=True
+                )
+                
+                # 处理流式响应
+                full_response = ""
+                
+                async def openai_response_generator():
+                    nonlocal full_response
+                    async for chunk in stream:
+                        if chunk.choices[0].delta.content:
+                            token = chunk.choices[0].delta.content
+                            full_response += token
+                            yield token
+                
+                # 使用流处理器传输响应
+                await self.stream_handler.stream_ai_response(
+                    stream_id, openai_response_generator(), character_config
+                )
+                
+                # 更新元数据
+                metadata["model_used"] = model_config.name
+                metadata["provider"] = "openai"
+                metadata["tokens_used"] += len(full_response.split())  # 简单估算
+                
+                return full_response or "抱歉，我暂时无法回复。"
             
-            # 使用流处理器传输响应
-            await self.stream_handler.stream_ai_response(
-                stream_id, response_generator(), character_config
-            )
-            
-            # 更新元数据
-            metadata["model_used"] = model_config.name
-            metadata["tokens_used"] += len(full_response.split())  # 简单估算
-            
-            return full_response or "抱歉，我暂时无法回复。"
+            else:
+                # 回退到错误信息
+                available_providers = []
+                if self.ollama_service and self.ollama_service.available_models:
+                    available_providers.append("ollama")
+                if self.openai_client:
+                    available_providers.append("openai")
+                
+                if available_providers:
+                    error_msg = f"抱歉，配置的AI提供商 '{provider}' 不可用。可用的提供商: {', '.join(available_providers)}"
+                else:
+                    error_msg = "抱歉，AI服务暂时不可用。"
+                
+                await self.stream_handler.send_stream_chunk(
+                    stream_id, error_msg, is_final=True
+                )
+                return error_msg
             
         except Exception as e:
             logger.error(f"生成流式AI响应失败: {e}")
@@ -617,7 +751,19 @@ class AIPipeline:
                 "components": {}
             }
             
-            # 检查AI客户端
+            # 检查Ollama服务
+            if not self.ollama_service:
+                await self._init_ai_clients()
+            
+            if self.ollama_service:
+                ollama_health = await self.ollama_service.health_check()
+                health_status["components"]["ollama"] = ollama_health
+                if ollama_health["status"] != "healthy":
+                    health_status["status"] = "degraded"
+            else:
+                health_status["components"]["ollama"] = "not_configured"
+            
+            # 检查OpenAI客户端
             if self.openai_client:
                 try:
                     # 简单的API测试

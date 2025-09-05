@@ -5,11 +5,12 @@
 ## 🌟 主要特性
 
 ### 核心功能
-- **智能对话**: 基于GPT-4的高质量AI对话
+- **智能对话**: 支持OpenAI GPT、Ollama本地模型等多种AI提供商
 - **流式响应**: WebSocket实时流式输出，模拟真人打字
 - **多轮对话**: 智能上下文管理和对话历史
 - **人设系统**: 多种AI角色，支持个性化定制
 - **长期记忆**: 用户偏好学习和对话总结
+- **本地部署**: 支持Ollama本地AI模型，数据完全私有
 
 ### 多模态交互
 - **语音对话**: 语音输入(ASR)和语音输出(TTS)
@@ -46,6 +47,7 @@
 - Docker & Docker Compose (推荐)
 - PostgreSQL 15+
 - Redis 7+
+- Ollama (可选，用于本地AI模型)
 
 ### 方式一：Docker部署 (推荐)
 
@@ -85,9 +87,10 @@ docker-compose logs -f backend
 
 1. **后端设置**
 ```bash
-cd backend
-
 # 创建虚拟环境
+conda create --name 01 python=3.11
+activate 01
+cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
@@ -119,6 +122,53 @@ npm run dev
 docker-compose up -d postgres redis
 
 # 或使用本地安装的数据库
+```
+
+### 方式三：Ollama本地AI模型部署
+
+如果您希望使用本地AI模型而不依赖外部API，可以配置Ollama：
+
+1. **安装Ollama**
+```bash
+# macOS/Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Windows: 从 https://ollama.ai/download 下载安装包
+```
+
+2. **启动Ollama服务**
+```bash
+ollama serve
+```
+
+3. **拉取推荐模型**
+```bash
+# 中文对话模型
+ollama pull qwen:7b
+
+# 通用模型
+ollama pull llama2:7b
+
+# 代码生成模型
+ollama pull codellama:7b
+```
+
+4. **配置系统使用Ollama**
+```bash
+# 编辑 .env 文件
+OLLAMA_BASE_URL=http://localhost:11434
+
+# 或修改 backend/app/config/config.yaml
+ai:
+  model:
+    provider: "ollama"
+    name: "qwen:7b"
+```
+
+5. **测试Ollama集成**
+```bash
+# 运行测试脚本
+python test_ollama.py
 ```
 
 ## 📁 项目结构
@@ -219,7 +269,36 @@ VITE_WS_URL=ws://localhost:8000
 
 ### API文档
 
-启动后端服务后，访问 http://localhost:8000/docs 查看完整的API文档。
+启动后端服务后，访问以下地址查看API文档：
+
+- **交互式API文档**: http://localhost:8000/docs
+- **ReDoc文档**: http://localhost:8000/redoc
+- **系统状态**: http://localhost:8000/health
+- **Ollama管理**: http://localhost:8000/api/ollama/health
+
+#### Ollama API示例
+
+```bash
+# 检查Ollama服务状态
+curl http://localhost:8000/api/ollama/health
+
+# 获取可用模型列表
+curl http://localhost:8000/api/ollama/models
+
+# 拉取新模型
+curl -X POST http://localhost:8000/api/ollama/models/pull \
+  -H "Content-Type: application/json" \
+  -d '{"model_name": "mistral:7b"}'
+
+# 测试模型对话
+curl -X POST http://localhost:8000/api/ollama/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen:7b",
+    "messages": [{"role": "user", "content": "你好"}],
+    "temperature": 0.7
+  }'
+```
 
 ### WebSocket接口
 

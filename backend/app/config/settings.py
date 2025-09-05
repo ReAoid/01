@@ -41,7 +41,7 @@ class SystemSettings(BaseSettings):
 
 class AIModelSettings(BaseSettings):
     """AI模型配置"""
-    provider: str = "openai"  # openai, anthropic, local
+    provider: str = "openai"  # openai, anthropic, ollama, local
     name: str = "gpt-4-turbo-preview"
     temperature: float = 0.7
     max_tokens: int = 1024
@@ -233,7 +233,9 @@ class Settings(BaseSettings):
     cors_allow_methods: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     cors_allow_headers: List[str] = ["*"]
     
-    # 第三方API密钥
+    # 第三方API密钥和配置
+    ollama_base_url: str = Field("http://localhost:11434", env="OLLAMA_BASE_URL")
+    ollama_api_key: Optional[str] = Field(None, env="OLLAMA_API_KEY")
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
     anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
     azure_speech_key: Optional[str] = Field(None, env="AZURE_SPEECH_KEY")
@@ -329,6 +331,7 @@ class Settings(BaseSettings):
     def get_api_keys(self) -> Dict[str, Optional[str]]:
         """获取所有API密钥"""
         return {
+            "ollama": self.ollama_api_key,
             "openai": self.openai_api_key,
             "anthropic": self.anthropic_api_key,
             "azure_speech": self.azure_speech_key,
